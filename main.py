@@ -5,7 +5,7 @@ import json
 import os
 
 # constants
-CSV_LIST_SEPARATOR = "; "
+SET_LIST_SEPARATOR = "; "
 
 # main class
 class Main():
@@ -17,7 +17,7 @@ class Main():
 
         # creating driver
         options = webdriver.ChromeOptions()
-        options.add_argument("--headless")
+        #options.add_argument("--headless")
         self.driver = webdriver.Chrome(options=options)
 
         # main properties
@@ -28,13 +28,49 @@ class Main():
         self.scan_input()
         self.generate_json()
 
-    def prompt_generate_quiz(self, kanji_data):
-        answer = input("Would you also like to generate a .set file for this kanji set? Answer 'yes' if yes, and anything else if no.")
+    def prompt_generate_quiz(self, kanji_data, file_name):
+        global SET_LIST_SEPARATOR
+
+        # checking answer
+        answer = input("\nWould you also like to generate a .set file for this kanji set? Answer 'yes' if yes, and anything else if no.\n")
         if answer.lower() != "yes":
             return
         
-        # generating quiz file
+        # getting ready to create quiz data
+        try:
+            os.makedirs("output/set")
+        except:
+            pass
+        quiz_string = ""
 
+        # looping through all kanji
+        for kanji in kanji_data:
+            data = kanji_data[kanji]
+            
+            # adding readings and meanings
+            kunyomi = SET_LIST_SEPARATOR.join(data["kunyomi"])
+            onyomi = SET_LIST_SEPARATOR.join(data["onyomi"])
+            meanings = SET_LIST_SEPARATOR.join(data["meanings"])
+
+            if len(data["kunyomi"]) > 0:
+                quiz_string += f"{kanji}（訓読み）,{kunyomi}\n"
+            if len(data["onyomi"]) > 0:
+                quiz_string += f"{kanji}（音読み）,{onyomi}\n"
+            quiz_string += f"{kanji}（いみ）,{meanings}\n"
+
+            # adding words and word meanings
+            for word_data in data["words"]:
+                word_meanings = SET_LIST_SEPARATOR.join(word_data["meanings"])
+
+                quiz_string += f"{word_data["word"]}（ふりがな）,{word_data["furigana"]}\n"
+                quiz_string += f"{word_data["word"]}（いみ）,{word_meanings}\n"
+
+        # creating file
+        with open(f"output/set/{file_name}.set", "w", encoding="utf-8") as f:
+            f.write(quiz_string)
+
+        # output
+        print("Completed generating .set file for kanji data.")
 
     def generate_json(self):
         global CSV_LIST_SEPARATOR
@@ -44,18 +80,21 @@ class Main():
         json_string = json.dumps(kanji_data)
         
         # asking for file name
-        file_name = input("What would you like to name the resultant .json file with the kanji data?\n")
-
-        os.makedirs("output/json")
+        file_name = input("\nWhat would you like to name the resultant .json file with the kanji data?\n")
 
         # generating .json file
-        with open(f"output/json/{file_name}.json", "w") as f:
+        try:
+            os.makedirs("output/json")
+        except:
+            pass
+
+        with open(f"output/json/{file_name}.json", "w", encoding="utf-8") as f:
             f.write(json_string)
 
         print("Successfully created .json file for kanji data output. It can be found in the \"output\" folder.")
 
         # prompting to generate quiz
-        self.prompt_generate_quiz(kanji_data)
+        self.prompt_generate_quiz(kanji_data, file_name)
         
     def get_kanji_data(self):
         print("Gathering kanji data . . . ")
@@ -79,7 +118,8 @@ class Main():
             print(f"Completed {kanji}, {round(percentage * 100)}% progressed")
 
         # returning
-        print("Finished gathering kanji data")
+        print("Finished gathering kanji data.")
+        self.driver.quit()
         return kanji_data
 
     def search_kanji(self, kanji: str):
@@ -121,7 +161,7 @@ class Main():
 
         # finding meanings
         meanings_container = self.driver.find_element(by=By.CSS_SELECTOR, value=".kanji-details__main-meanings")
-        meanings = meanings_container.text.replace(" ", "").split(",")
+        meanings = meanings_container.text.replace(" ", "").split(",")[0:self.meaning_count]
 
         # clicking words button
         link_buttons = self.driver.find_elements(by=By.CSS_SELECTOR, value=".small-12.large-10.columns>.inline-list>li>a")
@@ -199,5 +239,5 @@ class Main():
 
 # initializing
 word_count = input("How many words would you like to gather for each kanji found?\n")
-meaning_count = input("How many meanings would you like to gather for each word?\n")
+meaning_count = input("How many meanings would you like to gather for each word and kanji?\n")
 Main(int(word_count), int(meaning_count))
