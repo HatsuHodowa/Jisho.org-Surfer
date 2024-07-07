@@ -1,15 +1,19 @@
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.wait import WebDriverWait
-import time
+import json
+import os
 
-# main clas
+# constants
+CSV_LIST_SEPARATOR = "; "
+
+# main class
 class Main():
     def __init__(self, word_count=3, meaning_count=4):
 
-        # constants
-        self.WORD_COUNT = word_count
-        self.MEANING_COUNT = meaning_count
+        # settings
+        self.word_count = word_count
+        self.meaning_count = meaning_count
 
         # creating driver
         options = webdriver.ChromeOptions()
@@ -22,10 +26,36 @@ class Main():
 
         # scanning input
         self.scan_input()
-        self.generate_csv()
+        self.generate_json()
 
-    def generate_quiz_csv(self):
+    def prompt_generate_quiz(self, kanji_data):
+        answer = input("Would you also like to generate a .set file for this kanji set? Answer 'yes' if yes, and anything else if no.")
+        if answer.lower() != "yes":
+            return
+        
+        # generating quiz file
+
+
+    def generate_json(self):
+        global CSV_LIST_SEPARATOR
+
+        # gathering data
         kanji_data = self.get_kanji_data()
+        json_string = json.dumps(kanji_data)
+        
+        # asking for file name
+        file_name = input("What would you like to name the resultant .json file with the kanji data?\n")
+
+        os.makedirs("output/json")
+
+        # generating .json file
+        with open(f"output/json/{file_name}.json", "w") as f:
+            f.write(json_string)
+
+        print("Successfully created .json file for kanji data output. It can be found in the \"output\" folder.")
+
+        # prompting to generate quiz
+        self.prompt_generate_quiz(kanji_data)
         
     def get_kanji_data(self):
         print("Gathering kanji data . . . ")
@@ -109,7 +139,7 @@ class Main():
         word_containers = self.driver.find_elements(by=By.CSS_SELECTOR, value="#primary>.concepts>.concept_light.clearfix")
 
         for i, container in enumerate(word_containers):
-            if len(words) >= self.WORD_COUNT:
+            if len(words) >= self.word_count:
                 break
 
             # finding word and reading
@@ -133,7 +163,14 @@ class Main():
             meanings_elements = meanings_container.find_elements(by=By.CSS_SELECTOR, value=".meaning-meaning")
             
             for element in meanings_elements:
-                if len(word_meanings) >= self.MEANING_COUNT:
+
+                # excluding "other forms"
+                break_units = element.find_elements(by=By.CSS_SELECTOR, value="span.break-unit")
+                if len(break_units) > 0:
+                    break
+
+                # checking length and appending if there's room
+                if len(word_meanings) >= self.meaning_count:
                     break
                 word_meanings.append(element.text.split("; ")[0])
 
@@ -163,5 +200,4 @@ class Main():
 # initializing
 word_count = input("How many words would you like to gather for each kanji found?\n")
 meaning_count = input("How many meanings would you like to gather for each word?\n")
-file_name = input("What would you like to call the output file? It will be set in the .csv file format, so don't include the file format in yoru answer.\n")
-Main(int(word_count), int(meaning_count), file_name)
+Main(int(word_count), int(meaning_count))
