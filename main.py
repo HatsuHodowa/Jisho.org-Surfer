@@ -5,15 +5,17 @@ import json
 import os
 
 # constants
-SET_LIST_SEPARATOR = "; "
+SEPARATOR_ENG = "; "
+SEPARATOR_JAP = "；"
 
 # main class
 class Main():
-    def __init__(self, word_count=3, meaning_count=4):
+    def __init__(self, word_count=3, meaning_count=4, reading_count=3):
 
         # settings
         self.word_count = word_count
         self.meaning_count = meaning_count
+        self.reading_count = reading_count
 
         # creating driver
         options = webdriver.ChromeOptions()
@@ -29,7 +31,8 @@ class Main():
         self.generate_json()
 
     def prompt_generate_quiz(self, kanji_data, file_name):
-        global SET_LIST_SEPARATOR
+        global SEPARATOR_ENG
+        global SEPARATOR_JAP
 
         # checking answer
         answer = input("\nWould you also like to generate a .set file for this kanji set? Answer 'yes' if yes, and anything else if no.\n")
@@ -41,39 +44,44 @@ class Main():
             os.makedirs("output/set")
         except:
             pass
-        quiz_string = ""
+        readings_quiz = ""
+        meanings_quiz = ""
+        words_quiz = ""
 
         # looping through all kanji
         for kanji in kanji_data:
             data = kanji_data[kanji]
             
             # adding readings and meanings
-            kunyomi = SET_LIST_SEPARATOR.join(data["kunyomi"])
-            onyomi = SET_LIST_SEPARATOR.join(data["onyomi"])
-            meanings = SET_LIST_SEPARATOR.join(data["meanings"])
+            kunyomi = SEPARATOR_JAP.join(data["kunyomi"])
+            onyomi = SEPARATOR_JAP.join(data["onyomi"])
+            meanings = SEPARATOR_ENG.join(data["meanings"])
 
             if len(data["kunyomi"]) > 0:
-                quiz_string += f"{kanji}（訓読み）,{kunyomi}\n"
+                readings_quiz += f"{kanji}（訓読み）,{kunyomi}\n"
             if len(data["onyomi"]) > 0:
-                quiz_string += f"{kanji}（音読み）,{onyomi}\n"
-            quiz_string += f"{kanji}（いみ）,{meanings}\n"
+                readings_quiz += f"{kanji}（音読み）,{onyomi}\n"
+            meanings_quiz += f"{kanji}（いみ）,{meanings}\n"
 
             # adding words and word meanings
             for word_data in data["words"]:
-                word_meanings = SET_LIST_SEPARATOR.join(word_data["meanings"])
+                word_meanings = SEPARATOR_ENG.join(word_data["meanings"])
 
-                quiz_string += f"{word_data["word"]}（ふりがな）,{word_data["furigana"]}\n"
-                quiz_string += f"{word_data["word"]}（いみ）,{word_meanings}\n"
+                words_quiz += f"{word_data["word"]}（ふりがな）,{word_data["furigana"]}\n"
+                words_quiz += f"{word_data["word"]}（いみ）,{word_meanings}\n"
 
-        # creating file
-        with open(f"output/set/{file_name}.set", "w", encoding="utf-8") as f:
-            f.write(quiz_string)
+        # creating files
+        with open(f"output/set/{file_name}_readings.set", "w", encoding="utf-8") as f:
+            f.write(readings_quiz)
+        with open(f"output/set/{file_name}_meanings.set", "w", encoding="utf-8") as f:
+            f.write(meanings_quiz)
+        with open(f"output/set/{file_name}_words.set", "w", encoding="utf-8") as f:
+            f.write(words_quiz)
 
         # output
-        print("Completed generating .set file for kanji data.")
+        print("Completed generating .set files for kanji data.")
 
     def generate_json(self):
-        global CSV_LIST_SEPARATOR
 
         # gathering data
         kanji_data = self.get_kanji_data()
@@ -149,19 +157,30 @@ class Main():
         all_kunyomi = []
         all_onyomi = []
 
-        if kunyomi_container != None:
-            kunyomi_elements = kunyomi_container.find_elements(by=By.TAG_NAME, value="a")
-            for element in kunyomi_elements:
-                all_kunyomi.append(element.text)
+        def get_readings(container, goal_list: list[str]):
+            elements = container.find_elements(by=By.TAG_NAME, value="a")
+            for element in elements:
+                if len(goal_list) >= self.reading_count:
+                    return
 
+                # getting reading text
+                text: str = element.text.replace("-", "")
+                period_index = text.find(".")
+                if period_index != -1:
+                    text = text[0:period_index]
+
+                # adding if not duplicate
+                if not text in goal_list:
+                    goal_list.append(text)
+
+        if kunyomi_container != None:
+            get_readings(kunyomi_container, all_kunyomi)
         if onyomi_container != None:
-            onyomi_elements = onyomi_container.find_elements(by=By.CSS_SELECTOR, value="a")
-            for element in onyomi_elements:
-                all_onyomi.append(element.text)
+            get_readings(onyomi_container, all_onyomi)
 
         # finding meanings
         meanings_container = self.driver.find_element(by=By.CSS_SELECTOR, value=".kanji-details__main-meanings")
-        meanings = meanings_container.text.replace(" ", "").split(",")[0:self.meaning_count]
+        meanings = meanings_container.text.split(", ")[0:self.meaning_count]
 
         # clicking words button
         link_buttons = self.driver.find_elements(by=By.CSS_SELECTOR, value=".small-12.large-10.columns>.inline-list>li>a")
@@ -240,4 +259,5 @@ class Main():
 # initializing
 word_count = input("How many words would you like to gather for each kanji found?\n")
 meaning_count = input("How many meanings would you like to gather for each word and kanji?\n")
-Main(int(word_count), int(meaning_count))
+reading_count = input("How many readings, at most, would you like to gather for each kanji?\n")
+Main(int(word_count), int(meaning_count), int(reading_count))
